@@ -1,3 +1,9 @@
+# Data 
+data.json
+
+# Typescript build directory
+build
+
 # Logs
 logs
 *.log
