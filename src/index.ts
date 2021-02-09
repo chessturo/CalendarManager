@@ -93,7 +93,7 @@ async function handleCommand(commandTokens: string[], msg: Message): Promise<voi
             if (msg.guild !== null) {
                 if (commandTokens.length === 2) {
                     const newPrefix = commandTokens[1];
-                    const msgGuildData: GuildData | undefined = guilds.get((msg.guild as Guild).id);
+                    const msgGuildData: GuildData | undefined = guilds.get(msg.guild.id);
                     if (msgGuildData !== undefined) {
                         msgGuildData.prefix = newPrefix;
                         guildIdToPrefix.set(msgGuildData.id, newPrefix);
