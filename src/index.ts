@@ -131,6 +131,7 @@ async function setUpListeners(): Promise<void> {
 
     discordClient.on('guildCreate', (guild: Guild) => {
         guilds.set(guild.id, { id: guild.id, prefix: DEFAULT_PREFIX, calendars: [] });
+        guildIdToPrefix.set(guild.id, DEFAULT_PREFIX);
         saveData();
     });
 }
