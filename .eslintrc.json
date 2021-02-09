@@ -9,6 +9,11 @@
     ],
     "rules": {
         "indent": ["error", 4, { "SwitchCase": 1 }],
+        "prefer-destructuring": ["error", {
+            "array": false,
+            "object": true
+          }
+        ],
         "import/extensions": [
             "error",
             "ignorePackages",
