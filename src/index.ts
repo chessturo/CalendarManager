@@ -62,7 +62,7 @@ async function startUp(): Promise<void> {
     });
 
     await login;
-    discordClient.guilds.cache.forEach((guild: Guild, id: string) => {
+    discordClient.guilds.cache.forEach((_guild: Guild, id: string) => {
         if (!guildIdToPrefix.has(id)) {
             guildIdToPrefix.set(id, DEFAULT_PREFIX);
             guilds.set(id, { id, prefix: DEFAULT_PREFIX, calendars: [] });
