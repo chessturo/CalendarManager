@@ -8,12 +8,7 @@
         "airbnb-base"
     ],
     "rules": {
-        "indent": ["error", 4, { "SwitchCase": 1 }],
-        "prefer-destructuring": ["error", {
-            "array": false,
-            "object": true
-          }
-        ],
+        "comma-dangle": ["error", "always-multiline"],
         "import/extensions": [
             "error",
             "ignorePackages",
@@ -21,6 +16,12 @@
                 "js": "never",
                 "ts": "never"
             }
+        ],
+        "indent": ["error", 4, { "SwitchCase": 1 }],
+        "prefer-destructuring": ["error", {
+            "array": false,
+            "object": true
+          }
         ]
     }
 }
