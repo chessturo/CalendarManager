@@ -100,7 +100,7 @@ function handleCommand(commandTokens: string[], msg: Message): void {
                         msg.reply(`done! New prefix is \`${newPrefix}\`.`);
                     }
                 } else {
-                    msg.reply('This command needs the new prefix to use.');
+                    msg.reply(`the usage of this command is \`${guildIdToPrefix.get(msg.guild.id)}setprefix <new prefix>\``);
                 }
             } else {
                 msg.reply('This command can only be used within a server.');
