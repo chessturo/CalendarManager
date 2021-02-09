@@ -11,6 +11,7 @@ interface Calendar {
     url: string,
     // Either a role ID or 'everyone'.
     roleId: string,
+    channelId: string,
 }
 interface GuildData {
     id: string,
@@ -70,7 +71,7 @@ async function startUp(): Promise<void> {
     saveData();
 }
 
-function handleCommand(commandTokens: string[], msg: Message): void {
+async function handleCommand(commandTokens: string[], msg: Message): Promise<void> {
     switch (commandTokens[0].toLowerCase()) {
         case 'ping':
             msg.reply('pong!');
@@ -101,6 +102,28 @@ function handleCommand(commandTokens: string[], msg: Message): void {
                     }
                 } else {
                     msg.reply(`the usage of this command is \`${guildIdToPrefix.get(msg.guild.id)}setprefix <new prefix>\``);
+                }
+            } else {
+                msg.reply('This command can only be used within a server.');
+            }
+            break;
+        case 'calendars':
+            if (msg.guild !== null) {
+                if (commandTokens.length === 1) {
+                    const calendars: Calendar[] | undefined = guilds.get(msg.guild.id)?.calendars;
+                    if (calendars !== undefined) {
+                        if (calendars.length !== 0) {
+                            msg.reply(`The calendars currently registered in this guild are:\n${
+                                calendars.reduce<string>((accumulator: string, current: Calendar): string => `${accumulator}${current.url}\n`, '')
+                            }`);
+                        } else {
+                            msg.reply('this server doesn\'t have any calendars registered yet.');
+                        }
+                    } else {
+                        msg.reply('there was an internal error executing your command.');
+                    }
+                } else {
+                    msg.reply(`the usage of this comand is \`${guildIdToPrefix.get(msg.guild.id)}calendars\``);
                 }
             } else {
                 msg.reply('This command can only be used within a server.');
