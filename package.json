@@ -8,7 +8,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "start": "tsc; node ./build/index.js",
-    "debug": "tsc --sourcemap; node ./build/index.js"
+    "build-debug": "tsc --sourcemap"
   },
   "repository": {
     "type": "git",
@@ -34,6 +34,7 @@
   "dependencies": {
     "discord.js": "^12.5.1",
     "dotenv": "^8.2.0",
-    "node-ical": "^0.12.8"
+    "node-ical": "^0.12.8",
+    "winston": "^3.3.3"
   }
 }
