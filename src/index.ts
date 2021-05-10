@@ -7,47 +7,31 @@ import {
 import { promises as fs } from 'fs';
 import { CalendarResponse, fromURL as icalFromUrl } from 'node-ical';
 
-// Interfaces
-interface Calendar {
-    url: string,
-    // Either a role ID or 'everyone'.
-    roleId: string,
-    channelId: string,
-}
-interface GuildData {
-    id: string,
-    prefix: string,
-    calendars: Calendar[],
-}
-interface SaveData {
-    guilds: [string, GuildData][],
-}
 import { logger } from './log.js';
+import {
+    Calendar,
+    SaveData,
+    GuildData,
+    saveData,
+    SAVE_FILE,
+    parseRole,
+    parseTextChannel,
+} from './util.js';
 
 // Globals
 let guilds: Map<string, GuildData>;
 const discordClient: DiscordClient = new DiscordClient();
+// TODO: factor out and make the guilds Map the SSOT on prefixes.
 const guildIdToPrefix: Map<string, string> = new Map<string, string>();
 const throwExpr = (msg: any): never => { // Hack because `throw` isn't an expression
     throw new Error(msg);
 };
-const SAVE_FILE: string = process.env.SAVE_FILE ?? './data.json';
 const DEFAULT_PREFIX: string = process.env.DEFAULT_PREFIX ?? '~';
 const DISCORD_SECRET: string = process.env.DISCORD_SECRET ?? throwExpr('A DISCORD_SECRET must be provided in `./.env`!');
 const defaultGuildData = (id: string): GuildData => ({ id, prefix: DEFAULT_PREFIX, calendars: [] });
 // Makes sure that the empty save data gets updated if the SaveData type is changed
 const EMPTY_SAVE_DATA_VALUE: SaveData = { guilds: [] };
 const EMPTY_SAVE_DATA: string = JSON.stringify(EMPTY_SAVE_DATA_VALUE);
-function saveData(): void {
-    logger.debug('saveData.start');
-    const dataToSave: SaveData = { guilds: Array.from(guilds.entries()) };
-    const result: Promise<void> = fs.writeFile(SAVE_FILE, JSON.stringify(dataToSave));
-    logger.debug('saveData.fin');
-
-    result.catch((reason: any) => {
-        logger.error('saveData.error.write', { reason });
-    });
-}
 
 async function startUp(): Promise<void> {
     logger.debug('startUp.start');
@@ -57,7 +41,7 @@ async function startUp(): Promise<void> {
     let file: string;
     try {
         file = await fs.readFile(SAVE_FILE, { encoding: 'utf-8' });
-        logger.silly('startUp.readSave.success', { file });
+        logger.trace({ file }, 'startUp.readSave.success');
     } catch (err) {
         file = EMPTY_SAVE_DATA;
         if (err.code === 'ENOENT') {
@@ -89,7 +73,7 @@ async function startUp(): Promise<void> {
     });
     logger.trace('startUp.readGuilds.fin');
 
-    saveData();
+    saveData(guilds);
     logger.debug('startUp.fin');
 }
 
@@ -138,7 +122,7 @@ async function handleCommand(commandTokens: string[], msg: Message): Promise<voi
                     if (msgGuildData !== undefined) {
                         msgGuildData.prefix = newPrefix;
                         guildIdToPrefix.set(msgGuildData.id, newPrefix);
-                        saveData();
+                        saveData(guilds);
                         msg.reply(`done! New prefix is \`${newPrefix}\`.`);
                     } else {
                         msg.reply('internal error.');
@@ -179,7 +163,62 @@ async function handleCommand(commandTokens: string[], msg: Message): Promise<voi
                 }
             } else {
                 msg.reply('This command can only be used within a server.');
-                logger.silly('handleCommand.calendars.error.guild', logInfo);
+                logger.trace(logInfo, 'handleCommand.calendars.error.guild');
+            }
+            logger.trace(logInfo, 'handleCommand.calendars.fin');
+            break;
+        case 'addcalendar':
+            logger.trace(logInfo, 'handleCommand.addcalendar.start');
+            if (msg.guild !== null) {
+                if (commandTokens.length >= 4) {
+                    const guildData: GuildData | undefined = guilds.get(msg.guild.id);
+                    if (guildData !== undefined) {
+                        const calUrl: string = commandTokens[1];
+                        const channelIdentifier = commandTokens[2];
+                        const roleIdentifier = commandTokens.slice(3, commandTokens.length).join(' ');
+
+                        const parseRolePromise = parseRole(roleIdentifier, msg.guild);
+                        const icalPromise = icalFromUrl(calUrl);
+
+                        const results = await Promise.allSettled([parseRolePromise, icalPromise]);
+                        const parseRoleRes = results[0];
+                        const icalRes = results[1];
+                        const channelNameRes = parseTextChannel(channelIdentifier, msg.guild);
+
+                        if (parseRoleRes.status === 'rejected' || parseRoleRes.value === null) {
+                            msg.reply(`role \`${roleIdentifier}\` could not be parsed`);
+                            logger.trace(logInfo, 'handleCommand.addcalendar.error.parseRole');
+                            return;
+                        }
+                        if (icalRes.status === 'rejected') {
+                            msg.reply('the provided calendar could not be parsed as an ICS');
+                            logger.trace(logInfo, 'handleCommand.addcalendar.error.parseCal');
+                            return;
+                        }
+                        if (channelNameRes === null) {
+                            msg.reply('the provided text channel could not be found.');
+                            logger.trace(logInfo, 'handleCommand.addcalendar.error.findChannel');
+                            return;
+                        }
+
+                        const cal: CalendarResponse = icalRes.value;
+                        const roleId: Snowflake = parseRoleRes.value;
+                        const channelId: Snowflake = channelNameRes;
+
+                        guildData.calendars.push({ url: calUrl, roleId, channelId });
+
+                        // Queue events for the calendar in the scheduler
+                    } else {
+                        msg.reply('there was an internal error executing your command.');
+                        logger.warn(logInfo, 'handleCommand.addcalendar.error.internal');
+                    }
+                } else {
+                    msg.reply(`the usage of this command is \`${guildIdToPrefix.get(msg.guild.id)}addcalendar <ical URL> <channel name or \\#mention> <roleId, mention, or name>\``);
+                    logger.trace(logInfo, 'handleCommand.addcalendar.error.usage');
+                }
+            } else {
+                msg.reply('this command can only be used within a server.');
+                logger.trace(logInfo, 'handleCommand.addcalendar.error.guild');
             }
             logger.trace(logInfo, 'handleCommand.addcalendar.fin');
             break;
@@ -221,7 +260,7 @@ async function setUpListeners(): Promise<void> {
         guildIdToPrefix.set(guild.id, DEFAULT_PREFIX);
         logger.trace(logInfo, 'guildCreate.updatePrefixMap');
 
-        saveData();
+        saveData(guilds);
         logger.debug('guildCreate.fin', logInfo);
     });
 }
