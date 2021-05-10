@@ -7,8 +7,17 @@
     "extends": [
         "airbnb-base"
     ],
+    "settings": {
+        "import/resolver": {
+            "typescript": {} 
+        }
+    },
     "rules": {
-        "comma-dangle": ["error", "always-multiline"],
+        "comma-dangle": ["error", {
+            "arrays": "always-multiline",
+            "objects": "always-multiline",
+            "imports": "always-multiline"
+        }],
         "import/extensions": [
             "error",
             "ignorePackages",
@@ -24,4 +33,4 @@
           }
         ]
     }
-}
+} 

@@ -9,8 +9,9 @@
             "request": "launch",
             "runtimeArgs": [
                 "run-script",
-                "debug"
+                "start-debug"
             ],
+            "outputCapture": "std",
             "runtimeExecutable": "npm",
             "skipFiles": [
                 "<node_internals>/**"
