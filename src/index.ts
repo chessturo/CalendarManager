@@ -1,16 +1,11 @@
-import { CalendarResponse, fromURL as icalFromUrl } from 'node-ical';
-import { Client as DiscordClient, Guild, Message } from 'discord.js';
-import { promises as fs } from 'fs';
-import { config as dotenvConfig } from 'dotenv';
 import {
-    createLogger,
-    transports,
-    format,
-    config as winstonConfig,
-} from 'winston';
-
-// Set up dotenv
-dotenvConfig();
+    Client as DiscordClient,
+    Guild,
+    Message,
+    Snowflake,
+} from 'discord.js';
+import { promises as fs } from 'fs';
+import { CalendarResponse, fromURL as icalFromUrl } from 'node-ical';
 
 // Interfaces
 interface Calendar {
@@ -27,6 +22,7 @@ interface GuildData {
 interface SaveData {
     guilds: [string, GuildData][],
 }
+import { logger } from './log.js';
 
 // Globals
 let guilds: Map<string, GuildData>;
@@ -42,30 +38,6 @@ const defaultGuildData = (id: string): GuildData => ({ id, prefix: DEFAULT_PREFI
 // Makes sure that the empty save data gets updated if the SaveData type is changed
 const EMPTY_SAVE_DATA_VALUE: SaveData = { guilds: [] };
 const EMPTY_SAVE_DATA: string = JSON.stringify(EMPTY_SAVE_DATA_VALUE);
-const LOG_LEVEL = process.env.LOG_LEVEL ?? 'warn';
-const logger = createLogger({
-    format: format.combine(
-        format.timestamp(),
-        format.metadata({ fillExcept: ['message', 'level', 'timestamp', 'label'] }),
-        format.printf((info) => {
-            let output = `${info.timestamp} [${info.level}]: ${info.message}`;
-            // If log level >= debug
-            if (winstonConfig.npm.levels[LOG_LEVEL] >= winstonConfig.npm.levels.debug
-                // and there was metadata given
-                && Object.keys(info.metadata).length !== 0) {
-                // then print that metadata along with the log message.
-                output = `${output}\n\t${JSON.stringify(info.metadata)}`;
-            }
-            return output;
-        }),
-    ),
-    transports: [
-        new transports.Console({
-            level: LOG_LEVEL,
-        }),
-    ],
-});
-
 function saveData(): void {
     logger.debug('saveData.start');
     const dataToSave: SaveData = { guilds: Array.from(guilds.entries()) };
@@ -81,7 +53,7 @@ async function startUp(): Promise<void> {
     logger.debug('startUp.start');
     const login: Promise<string> = discordClient.login(DISCORD_SECRET);
 
-    logger.silly('startUp.readSave.start');
+    logger.trace('startUp.readSave.start');
     let file: string;
     try {
         file = await fs.readFile(SAVE_FILE, { encoding: 'utf-8' });
@@ -92,30 +64,30 @@ async function startUp(): Promise<void> {
             logger.warn('startUp.readSave.notFound');
             await fs.writeFile(SAVE_FILE, EMPTY_SAVE_DATA, 'utf-8');
         } else {
-            logger.error('startUp.readSave.error');
+            logger.fatal('startUp.readSave.error');
             throw err;
         }
     }
-    logger.silly('startUp.readSave.fin');
+    logger.trace('startUp.readSave.fin');
 
-    logger.silly('startUp.parseSave.start');
+    logger.trace('startUp.parseSave.start');
     const savedData: SaveData = JSON.parse(file);
     guilds = new Map(savedData.guilds);
     guilds.forEach((guild: GuildData) => {
         guildIdToPrefix.set(guild.id, guild.prefix);
     });
-    logger.silly('startUp.parseSave.fin');
+    logger.trace('startUp.parseSave.fin');
 
     await login;
 
-    logger.silly('startUp.readGuilds.start');
+    logger.trace('startUp.readGuilds.start');
     discordClient.guilds.cache.forEach((_guild: Guild, id: string) => {
         if (!guildIdToPrefix.has(id)) {
             guildIdToPrefix.set(id, DEFAULT_PREFIX);
             guilds.set(id, { id, prefix: DEFAULT_PREFIX, calendars: [] });
         }
     });
-    logger.silly('startUp.readGuilds.fin');
+    logger.trace('startUp.readGuilds.fin');
 
     saveData();
     logger.debug('startUp.fin');
@@ -131,34 +103,34 @@ async function handleCommand(commandTokens: string[], msg: Message): Promise<voi
             authorId: msg.author.id,
         },
     };
-    logger.silly('handleCommand.start', logInfo);
+    logger.trace(logInfo, 'handleCommand.start');
     switch (commandTokens[0].toLowerCase()) {
         case 'ping':
-            logger.silly('handleCommand.ping.start', logInfo);
+            logger.trace(logInfo, 'handleCommand.ping.start');
             msg.reply('pong!');
-            logger.silly('handleCommand.ping.fin', logInfo);
+            logger.trace(logInfo, 'handleCommand.ping.fin');
             break;
         case 'prefix':
-            logger.silly('handleCommand.prefix.start', logInfo);
+            logger.trace(logInfo, 'handleCommand.prefix.start');
             if (msg.guild !== null) {
                 if (commandTokens.length === 1) {
                     msg.reply(`the current prefix is \`${guildIdToPrefix.get(msg.guild.id)}\``);
-                    logger.silly('handleCommand.prefix.success', logInfo);
+                    logger.trace(logInfo, 'handleCommand.prefix.success');
                 } else if (commandTokens.length === 2) {
                     msg.reply(`the current prefix is \`${guildIdToPrefix.get(msg.guild.id)}\`. Did you mean \`${guildIdToPrefix.get(msg.guild.id)}setprefix\`?`);
-                    logger.silly('handleCommand.prefix.error.oneExtraArg', logInfo);
+                    logger.trace(logInfo, 'handleCommand.prefix.error.oneExtraArg');
                 } else {
                     msg.reply(`Invalid usage of \`${guildIdToPrefix.get(msg.guild.id)}prefix\``);
-                    logger.silly('handleCommand.prefix.error.extraArgs', logInfo);
+                    logger.trace(logInfo, 'handleCommand.prefix.error.extraArgs');
                 }
             } else {
                 msg.reply('This command can only be used within a server.');
-                logger.silly('handleCommand.prefix.error.guild', logInfo);
+                logger.trace(logInfo, 'handleCommand.prefix.error.guild');
             }
-            logger.silly('handleCommand.prefix.fin', logInfo);
+            logger.trace(logInfo, 'handleCommand.prefix.fin');
             break;
         case 'setprefix':
-            logger.silly('handleCommand.setprefix.start', logInfo);
+            logger.trace(logInfo, 'handleCommand.setprefix.start');
             if (msg.guild !== null) {
                 if (commandTokens.length === 2) {
                     const newPrefix = commandTokens[1];
@@ -170,21 +142,21 @@ async function handleCommand(commandTokens: string[], msg: Message): Promise<voi
                         msg.reply(`done! New prefix is \`${newPrefix}\`.`);
                     } else {
                         msg.reply('internal error.');
-                        logger.error('handleCommand.setPrefix.error.internal', logInfo);
+                        logger.warn(logInfo, 'handleCommand.setPrefix.error.internal');
                     }
-                    logger.silly('handleCommand.setprefix.success', { newPrefix }, logInfo);
+                    logger.trace({ newPrefix, ...logInfo }, 'handleCommand.setprefix.success');
                 } else {
                     msg.reply(`the usage of this command is \`${guildIdToPrefix.get(msg.guild.id)}setprefix <new prefix>\``);
-                    logger.silly('handleCommand.setprefix.error.usage', logInfo);
+                    logger.trace(logInfo, 'handleCommand.setprefix.error.usage');
                 }
             } else {
                 msg.reply('This command can only be used within a server.');
-                logger.silly('handleCommand.setprefix.error.guild', logInfo);
+                logger.trace(logInfo, 'handleCommand.setprefix.error.guild');
             }
-            logger.silly('handleCommand.setprefix.fin', logInfo);
+            logger.trace(logInfo, 'handleCommand.setprefix.fin');
             break;
         case 'calendars':
-            logger.silly('handleCommand.calendars.start', logInfo);
+            logger.trace(logInfo, 'handleCommand.calendars.start');
             if (msg.guild !== null) {
                 if (commandTokens.length === 1) {
                     const calendars: Calendar[] | undefined = guilds.get(msg.guild.id)?.calendars;
@@ -192,30 +164,30 @@ async function handleCommand(commandTokens: string[], msg: Message): Promise<voi
                         if (calendars.length !== 0) {
                             const replyString: string = calendars.reduce<string>((accumulator: string, current: Calendar): string => `${accumulator}${current.url}\n`, '');
                             msg.reply(`The calendars currently registered in this guild are:\n${replyString}`);
-                            logger.silly('handleCommand.calendars.success', { replyString: replyString.replace(/\n/g, '\\n') }, logInfo);
+                            logger.trace(logInfo, 'handleCommand.calendars.success');
                         } else {
                             msg.reply('this server doesn\'t have any calendars registered yet.');
-                            logger.silly('handleCommand.calendars.error.noCalendars', logInfo);
+                            logger.trace(logInfo, 'handleCommand.calendars.error.noCalendars');
                         }
                     } else {
                         msg.reply('there was an internal error executing your command.');
-                        logger.warn('handleCommand.calendars.error.internal', logInfo);
+                        logger.warn(logInfo, 'handleCommand.calendars.error.internal');
                     }
                 } else {
                     msg.reply(`the usage of this comand is \`${guildIdToPrefix.get(msg.guild.id)}calendars\``);
-                    logger.silly('handleCommand.calendars.error.usage', logInfo);
+                    logger.trace(logInfo, 'handleCommand.calendars.error.usage');
                 }
             } else {
                 msg.reply('This command can only be used within a server.');
                 logger.silly('handleCommand.calendars.error.guild', logInfo);
             }
-            logger.silly('handleCommand.calendars.fin', logInfo);
+            logger.trace(logInfo, 'handleCommand.addcalendar.fin');
             break;
         default:
             msg.reply('invalid command!');
-            logger.silly('handleCommand.error.invalid', logInfo);
+            logger.trace(logInfo, 'handleCommand.error.invalid');
     }
-    logger.silly('handleCommand.fin');
+    logger.trace('handleCommand.fin');
 }
 
 async function setUpListeners(): Promise<void> {
@@ -240,14 +212,14 @@ async function setUpListeners(): Promise<void> {
         const logInfo = {
             guildId: guild.id,
         };
-        logger.debug('guildCreate.start', logInfo);
+        logger.debug(logInfo, 'guildCreate.start');
 
         const newMapEntry: GuildData = defaultGuildData(guild.id);
         guilds.set(guild.id, newMapEntry);
-        logger.silly('guildCreate.updateGuildMap', { newMapEntry }, logInfo);
+        logger.trace({ newMapEntry, ...logInfo }, 'guildCreate.updateGuildMap');
 
         guildIdToPrefix.set(guild.id, DEFAULT_PREFIX);
-        logger.silly('guildCreate.updatePrefixMap', logInfo);
+        logger.trace(logInfo, 'guildCreate.updatePrefixMap');
 
         saveData();
         logger.debug('guildCreate.fin', logInfo);
@@ -257,5 +229,5 @@ async function setUpListeners(): Promise<void> {
 startUp().then(() => {
     setUpListeners();
 }).catch((reason: any) => {
-    logger.error(`Failed to start up: ${reason}`);
+    logger.fatal(`Failed to start up: ${reason}`);
 });
